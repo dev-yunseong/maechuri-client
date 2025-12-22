@@ -1,0 +1,19 @@
+declare module 'react-game-engine' {
+  import { Component, CSSProperties } from 'react';
+
+  export interface Entity {
+    [key: string]: unknown;
+    renderer?: (entity: Entity) => React.ReactNode;
+  }
+
+  export interface GameEngineProps {
+    systems?: Array<(entities: Record<string, Entity>, args: Record<string, unknown>) => Record<string, Entity>>;
+    entities?: Record<string, Entity>;
+    style?: CSSProperties;
+    running?: boolean;
+    onEvent?: (event: Record<string, unknown>) => void;
+    children?: React.ReactNode;
+  }
+
+  export class GameEngine extends Component<GameEngineProps> {}
+}
