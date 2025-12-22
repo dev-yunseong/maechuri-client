@@ -12,8 +12,11 @@ interface Position {
   y: number;
 }
 
+type Direction = 'up' | 'down' | 'left' | 'right';
+
 interface PlayerEntity extends Entity {
   position: Position;
+  direction: Direction;
 }
 
 interface TileEntity extends Entity {
@@ -24,6 +27,7 @@ interface TileEntity extends Entity {
 
 const GameScreen: React.FC = () => {
   const [playerPosition, setPlayerPosition] = React.useState<Position>({ x: 1, y: 1 });
+  const [playerDirection, setPlayerDirection] = React.useState<Direction>('down');
 
   const checkCollision = (x: number, y: number): boolean => {
     const { layers } = mockScenarioData.map;
@@ -58,11 +62,25 @@ const GameScreen: React.FC = () => {
     return null;
   };
 
+  const getFacingPosition = React.useCallback((position: Position): Position => {
+    switch (playerDirection) {
+      case 'up':
+        return { x: position.x, y: position.y - 1 };
+      case 'down':
+        return { x: position.x, y: position.y + 1 };
+      case 'left':
+        return { x: position.x - 1, y: position.y };
+      case 'right':
+        return { x: position.x + 1, y: position.y };
+    }
+  }, [playerDirection]);
+
   const handleKeyDown = React.useCallback((e: KeyboardEvent) => {
     setPlayerPosition((currentPosition) => {
       let newX = currentPosition.x;
       let newY = currentPosition.y;
       let moved = false;
+      let newDirection: Direction | null = null;
 
       switch (e.key) {
         case 'ArrowUp':
@@ -70,56 +88,53 @@ const GameScreen: React.FC = () => {
         case 'W':
           newY -= 1;
           moved = true;
+          newDirection = 'up';
           break;
         case 'ArrowDown':
         case 's':
         case 'S':
           newY += 1;
           moved = true;
+          newDirection = 'down';
           break;
         case 'ArrowLeft':
         case 'a':
         case 'A':
           newX -= 1;
           moved = true;
+          newDirection = 'left';
           break;
         case 'ArrowRight':
         case 'd':
         case 'D':
           newX += 1;
           moved = true;
+          newDirection = 'right';
           break;
         case ' ':
         case 'e':
         case 'E': {
-          // Interact key
-          // Check all 4 directions for interactable objects
-          const directions = [
-            { x: currentPosition.x, y: currentPosition.y - 1 }, // up
-            { x: currentPosition.x, y: currentPosition.y + 1 }, // down
-            { x: currentPosition.x - 1, y: currentPosition.y }, // left
-            { x: currentPosition.x + 1, y: currentPosition.y }, // right
-          ];
-
-          for (const dir of directions) {
-            const interactableId = checkInteraction(dir.x, dir.y);
-            if (interactableId !== null) {
-              alert(`Interacting with object ID: ${interactableId}`);
-              break;
-            }
+          // Interact key - only check the direction the player is facing
+          const facingPosition = getFacingPosition(currentPosition);
+          const interactableId = checkInteraction(facingPosition.x, facingPosition.y);
+          if (interactableId !== null) {
+            alert(`Interacting with object ID: ${interactableId}`);
           }
           break;
         }
       }
 
       if (moved) {
+        if (newDirection) {
+          setPlayerDirection(newDirection);
+        }
         if (!checkCollision(newX, newY)) {
           return { x: newX, y: newY };
         }
       }
       return currentPosition;
     });
-  }, []);
+  }, [getFacingPosition]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -157,7 +172,57 @@ const GameScreen: React.FC = () => {
   };
 
   const renderPlayer = (entity: Entity) => {
-    const { position } = entity as PlayerEntity;
+    const { position, direction } = entity as PlayerEntity;
+    
+    // Create a direction indicator (a small triangle pointing in the direction)
+    const getDirectionIndicator = () => {
+      const baseStyle = {
+        position: 'absolute' as const,
+        width: 0,
+        height: 0,
+        borderStyle: 'solid' as const,
+      };
+
+      switch (direction) {
+        case 'up':
+          return {
+            ...baseStyle,
+            bottom: '50%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            borderWidth: '0 8px 12px 8px',
+            borderColor: 'transparent transparent #ffffff transparent',
+          };
+        case 'down':
+          return {
+            ...baseStyle,
+            top: '50%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            borderWidth: '12px 8px 0 8px',
+            borderColor: '#ffffff transparent transparent transparent',
+          };
+        case 'left':
+          return {
+            ...baseStyle,
+            top: '50%',
+            right: '50%',
+            transform: 'translateY(-50%)',
+            borderWidth: '8px 12px 8px 0',
+            borderColor: 'transparent #ffffff transparent transparent',
+          };
+        case 'right':
+          return {
+            ...baseStyle,
+            top: '50%',
+            left: '50%',
+            transform: 'translateY(-50%)',
+            borderWidth: '8px 0 8px 12px',
+            borderColor: 'transparent transparent transparent #ffffff',
+          };
+      }
+    };
+
     return (
       <div
         style={{
@@ -170,7 +235,9 @@ const GameScreen: React.FC = () => {
           borderRadius: '50%',
           zIndex: 1000,
         }}
-      />
+      >
+        <div style={getDirectionIndicator()} />
+      </div>
     );
   };
 
@@ -199,11 +266,12 @@ const GameScreen: React.FC = () => {
     // Add player entity
     result.player = {
       position: playerPosition,
+      direction: playerDirection,
       renderer: renderPlayer,
     };
 
     return result;
-  }, [playerPosition]);
+  }, [playerPosition, playerDirection]);
 
   const mapWidth = mockScenarioData.map.layers[0].tileMap[0].length * TILE_SIZE;
   const mapHeight = mockScenarioData.map.layers[0].tileMap.length * TILE_SIZE;
@@ -213,7 +281,7 @@ const GameScreen: React.FC = () => {
       <div className="game-info">
         <h2>{mockScenarioData.scenarioName}</h2>
         <p>Use Arrow Keys or WASD to move. Press E or Space to interact with objects.</p>
-        <p>Player Position: ({playerPosition.x}, {playerPosition.y})</p>
+        <p>Player Position: ({playerPosition.x}, {playerPosition.y}) | Direction: {playerDirection}</p>
       </div>
       <div className="game-container" style={{ width: mapWidth, height: mapHeight }}>
         <GameEngine
